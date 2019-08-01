@@ -40,9 +40,132 @@ glm::mat4 mModel_bowl[MAX_VIEWPORTS];  // Changes for each model !
 glm::mat4 mMVP_bowl[MAX_VIEWPORTS];
 glm::mat4 mMVP_car[MAX_VIEWPORTS];
 
+typedef struct _srv_viewport_t
+{
+	unsigned int x;
+	unsigned int y;
+	unsigned int width;
+	unsigned int height;
+	bool animate;
+} srv_viewport_t;
+
+srv_viewport_t srv_viewports[] = {
+	{
+		x : 0,
+		y : 0,
+		width : 960,
+		height: 1080,
+		//fengyuhong 20190224
+		//animate: true,
+		animate: false,
+	},
+	{
+		x : 960,
+		y : 0,
+		width : 960,
+		height: 1080,
+		animate: false,
+	}
+};
+
+render_state_t *pObj;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
+
+
+void render_renderFrame(render_state_t *pObj, GLuint*texYuv)
+{
+	glClear(GL_COLOR_BUFFER_BIT);
+	glViewport(srv_viewports[1].x,
+		       srv_viewports[1].y,
+			   srv_viewports[1].width,
+			   srv_viewports[1].height);
+
+	srv_draw(pObj, texYuv, 1);
+    car_draw(1,upon,angle,view_dist);
+		//boxes_draw((ObjectBox *)pObj->BoxLUT, (Pose3D_f *)pObj->BoxPose3D, texYuv);
+    usleep(33000);
+}
+
+
+int render_setup(render_state_t *pObj)
+{
+    if(srv_setup(pObj) == -1)
+	{
+		return -1;
+	}
+	
+	//fengyuhong 20190224 add
+	printf("render_setup:srv_setup ok\n");
+
+    //Initialize views
+    //srv_views_init();
+    /*  */ //????????????????????????????????????????????????????????????
+
+	//fengyuhong 20190224 add
+	printf("render_setup:srv_views_init ok\n");
+
+    //STEP2 - initialise the vertices
+    car_init();
+    GL_CHECK(car_init_vertices_vbo);
+
+	//fengyuhong 20190224 add
+	printf("render_setup:car_init ok\n");
+
+    //STEP3 - initialise the individual views
+    //screen1_init_vbo();
+    GL_CHECK(screen1_init_vbo);
+
+    num_viewports = 2;//sizeof(srv_viewports)/sizeof(srv_viewport_t);
+
+    for (int i = 0; i < num_viewports; i++)
+    {
+		//fengyuhong 20190225
+	    //current_index[i] = (0+i)%num_srv_views;
+		current_index[i] = 1;//0
+	    set_coords(i, current_index[i]);
+    }
+
+	//fengyuhong 201902224 add
+	printf("render_setup:set_coords for viewports ok\n");
+
+    //boxes_init();
+    render_updateView();
+
+    // Default mode for key/joystick input
+    MODE_CAM(srv_coords_vp[0]);
+
+    //cull
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+
+#if defined(STANDALONE) || defined(SRV_USE_JOYSTICK)
+#ifdef _WIN32
+	hThread = CreateThread(
+		NULL,                   // default security attributes
+		0,                      // use default stack size
+		scan_thread_function,       // thread function name
+		NULL,          // argument to thread function
+		0,                      // use default creation flags
+		&dwThreadId);   // returns the thread identifier
+
+
+								// Check the return value for success.
+								// If CreateThread fails, terminate execution.
+								// This will automatically clean up threads and memory.
+
+	if (hThread == NULL)
+	{
+		printf("CreateThread failed");
+		ExitProcess(3);
+	}
+#else
+    pthread_create(&scan_thread, NULL, scan_thread_function, (void *)&scan_thread_data);
+#endif
+#endif
+    return 0;
+}
 
 int main()
 {
@@ -70,167 +193,22 @@ int main()
         std::cout << "Failed to initialize GLAD" << std::endl;
         return -1;
     }
-    
-
-
-    //---------------------------------------数据绑定----------------------------------------------------//
-    float vertices[6702*15];
-    FILE *fp = fopen("../../src/shader/vertex.bin","rb");                    //导入顶点
-    GLuint flag =fread(vertices,sizeof(vertices),1,fp);     //读入顶点数据表,每次读sizeof(vertices)个，读一次
-    fclose(fp);
-    //for (int i=0;i<15;i++){ printf("%f\n",vertices[i]); } //打印前15个数据
-    
-    unsigned int indices[12810*3];                          //读入曲面到indices-曲面索引表
-
-    fp = fopen("../../src/shader/surface.bin","rb");                         //导入曲面
-    flag =fread(indices,sizeof(indices),1,fp);
-    fclose(fp);
-    //for (int i=0;i<3;i++){ printf("%u\n",indices[i]); }    //打印前3个索引
-
-    //srv_init(&srv_renderObj);
-    
-    // 建立编译着色器
-    // ------------------------------------
-    Shader srvShader("../../src/shader/texture.vs", "../../src/shader/texture.fs");//以可执行文件Surroundview_sim为起点索引相对路径
-    
-
    
    //----------------------------------------纹理绑定----------------------------------------------------//
-    unsigned int texture1, texture2, texture3, texture4;
-    // texture 1
-    // ---------
-    glGenTextures(1, &texture1);
-    glBindTexture(GL_TEXTURE_2D, texture1); 
-     // set the texture wrapping parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);	// set texture wrapping to GL_CLAMP_TO_EDGE (default wrapping method)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    // set texture filtering parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    // load image, create texture and generate mipmaps
+    unsigned char*texYuv[4];
     int width, height, nrChannels;
 
-    unsigned char *data = stbi_load("../../ext/resource/image/front0.bmp", &width, &height, &nrChannels, 0);
-    if (data)
-    {
-        factor1 = luma_average(width,height,data);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-    }
-    else
-    {
-        std::cout << "Failed to load front texture" << std::endl;
-    }
-    stbi_image_free(data);
-
-    // texture 2
-    // ---------
-    glGenTextures(1, &texture2);
-    glBindTexture(GL_TEXTURE_2D, texture2);
-    // set the texture wrapping parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);	// set texture wrapping to GL_CLAMP_TO_EDGE (default wrapping method)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    // set texture filtering parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    // load image, create texture and generate mipmaps
-    // data = stbi_load(FileSystem::getPath("resources/textures/awesomeface.png").c_str(), &width, &height, &nrChannels, 0);
-    data = stbi_load("../../ext/resource/image/left0.bmp", &width, &height, &nrChannels, 0);
-    if (data)
-    {
-        // note that the awesomeface.png has transparency and thus an alpha channel, so make sure to tell OpenGL the data type is of GL_RGBA
-        factor2 = luma_average(width,height,data);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-    }
-    else
-    {
-        std::cout << "Failed to load left texture" << std::endl;
-    }
-    stbi_image_free(data);
-
-    // texture 3
-    // ---------
-    glGenTextures(1, &texture3);
-    glBindTexture(GL_TEXTURE_2D, texture3);
-    // set the texture wrapping parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);	// set texture wrapping to GL_CLAMP_TO_EDGE (default wrapping method)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    // set texture filtering parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    // load image, create texture and generate mipmaps
-    // data = stbi_load(FileSystem::getPath("resources/textures/awesomeface.png").c_str(), &width, &height, &nrChannels, 0);
-    data = stbi_load("../../ext/resource/image/rear0.bmp", &width, &height, &nrChannels, 0);
-    if (data)
-    {
-        // note that the awesomeface.png has transparency and thus an alpha channel, so make sure to tell OpenGL the data type is of GL_RGBA
-        factor3 = luma_average(width,height,data);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-    }
-    else
-    {
-        std::cout << "Failed to load rear texture" << std::endl;
-    }
-    stbi_image_free(data);
-
-    // texture 4
-    // ---------
-    glGenTextures(1, &texture4);
-    glBindTexture(GL_TEXTURE_2D, texture4);
-    // set the texture wrapping parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);	// set texture wrapping to GL_CLAMP_TO_EDGE (default wrapping method)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    // set texture filtering parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    // load image, create texture and generate mipmaps
-    // data = stbi_load(FileSystem::getPath("resources/textures/awesomeface.png").c_str(), &width, &height, &nrChannels, 0);
-    data = stbi_load("../../ext/resource/image/right0.bmp", &width, &height, &nrChannels, 0);
-    if (data)
-    {
-        // note that the awesomeface.png has transparency and thus an alpha channel, so make sure to tell OpenGL the data type is of GL_RGBA
-        factor4 = luma_average(width,height,data);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-    }
-    else
-    {
-        std::cout << "Failed to load right texture" << std::endl;
-    }
-    stbi_image_free(data);
-
-    srvShader.use();                 // don't forget to activate/use the shader before setting uniforms!
-
-    srvShader.setInt("texture1", 0); // 此处也可以直接使用glUniform1i(glGetUniformLocation(srvShader.ID, "texture1"), 0);设置统一变量
-    srvShader.setInt("texture2", 1);
-    srvShader.setInt("texture3", 2);
-    srvShader.setInt("texture4", 3);
+    texYuv[0] = stbi_load("../../ext/resource/image/front0.bmp", &width, &height, &nrChannels, 0);
+    //stbi_image_free(texYuv[0]);
+    texYuv[1]  = stbi_load("../../ext/resource/image/left0.bmp", &width, &height, &nrChannels, 0);
+    //stbi_image_free(texYuv[1]);
+    texYuv[2]  = stbi_load("../../ext/resource/image/rear0.bmp", &width, &height, &nrChannels, 0);
+    //stbi_image_free(texYuv[2]);
+    texYuv[3]  = stbi_load("../../ext/resource/image/right0.bmp", &width, &height, &nrChannels, 0);
+    //stbi_image_free(texYuv[3]);
      
-    //--------------------------------------亮度均衡-----------------------------------------//
-    luma_adjust2(&factor1,&factor2,&factor3,&factor4);
-
-    #ifdef LUMA_AVG
-    srvShader.setFloat("gain1",factor1);
-    srvShader.setFloat("gain2",factor2);
-    srvShader.setFloat("gain3",factor3);
-    srvShader.setFloat("gain4",factor4);
-
-    // srvShader.setFloat("gain1",gain1);
-    // srvShader.setFloat("gain2",gain2);
-    // srvShader.setFloat("gain3",gain3);
-    // srvShader.setFloat("gain4",gain4);
-    #else
-    srvShader.setFloat("gain1",1);
-    srvShader.setFloat("gain2",1);
-    srvShader.setFloat("gain3",1);
-    srvShader.setFloat("gain4",1);  
-    #endif
-
-    //判断导入是否成功
-    if(car_init()){ printf("load_3d model files failed\n");return -1;}//返回零则初始化成功
-    unsigned int VBO, VAO, EBO;         //定义顶点缓冲区，顶点数组对象，索引缓冲区对象
+    
+    render_setup(pObj);
 
     //--------------------------------------渲染循环---------------------------------------//
     while (!glfwWindowShouldClose(window))
@@ -247,7 +225,6 @@ int main()
         //glCullFace(GL_FRONT);
 
         // render container
-        srvShader.use();
         
          //----------------------------------绘制3D曲面------------------------------------//
         glm::mat4 srf_model = glm::mat4(1.0f);//重置模型矩阵,不做任何旋转操作
@@ -264,64 +241,9 @@ int main()
                                                    );
         //设置透视矩阵
         glm::mat4 srf_projection = glm::perspective(45.0f, singleRatio, 0.1f, 1000.0f);
-
-        //传参到着色器
         
-        srvShader.setMat4("view",srf_view);
-        srvShader.setMat4("projection",srf_projection);
-        srvShader.setMat4("model",srf_model);
-    
 
-        glGenVertexArrays(1, &VAO);           //生成顶点数组对象
-        glBindVertexArray(VAO);               //绑定顶点数组对象
-
-        glGenBuffers(1, &VBO);                //生成顶点缓冲区对象
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);   //绑定顶点缓冲区对象
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);//创建并初始化顶点数据
-        //target指定目标缓冲区对象。 符号常量必须为GL_ARRAY_BUFFER或GL_ELEMENT_ARRAY_BUFFER。
-        //size指定缓冲区对象的新数据存储的大小（以字节为单位）。
-        //data指定将复制到数据存储区以进行初始化的数据的指针，如果不复制数据，则指定NULL。
-        //usage指定数据存储的预期使用模式。 符号常量必须为GL_STREAM_DRAW，GL_STATIC_DRAW或GL_DYNAMIC_DRAW。
-
-        glGenBuffers(1, &EBO);                //生成索引缓冲区对象
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-        // glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3, indices, GL_STATIC_DRAW);
-
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture1);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, texture2);
-        glActiveTexture(GL_TEXTURE2);
-        glBindTexture(GL_TEXTURE_2D, texture3);
-        glActiveTexture(GL_TEXTURE3);
-        glBindTexture(GL_TEXTURE_2D, texture4);
-
-        // position attribute--------------------CPU向GPU传入顶点数组的数据并分配属性----------------------------------//
-        //参数1：属性索引  参数2：参数的个数  参数3：参数的类型  参数4：相邻的同属性参数在表格中的跨度  参数5：第一个参数在表格中的偏移量
-        // vertex
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 15 * sizeof(float), (void*)0);//从VBO中
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 15 * sizeof(float), (void*)(3 * sizeof(float)));
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 15 * sizeof(float), (void*)(5 * sizeof(float)));
-        glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, 15 * sizeof(float), (void*)(7 * sizeof(float)));
-        glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, 15 * sizeof(float), (void*)(9 * sizeof(float)));
-        glVertexAttribPointer(5, 1, GL_FLOAT, GL_FALSE, 15 * sizeof(float), (void*)(11 * sizeof(float)));
-        glVertexAttribPointer(6, 1, GL_FLOAT, GL_FALSE, 15 * sizeof(float), (void*)(12 * sizeof(float)));
-        glVertexAttribPointer(7, 1, GL_FLOAT, GL_FALSE, 15 * sizeof(float), (void*)(13 * sizeof(float)));
-        glVertexAttribPointer(8, 1, GL_FLOAT, GL_FALSE, 15 * sizeof(float), (void*)(14 * sizeof(float)));
-
-        //绘制基本单元 glDrawElements 和glDrawArrays具备相同的作用，前者占用更大的内存，后者可以跳跃式的绘制
-        for(int k=0;k<=8;k++) glEnableVertexAttribArray(k);
-        glDrawElements(GL_TRIANGLES, sizeof(indices)/sizeof(unsigned int), GL_UNSIGNED_INT, 0);
-        for(int k=0;k<=8;k++) glDisableVertexAttribArray(k);
-
-        glDeleteBuffers(1,&VBO);//地址指向零之前，需要删除buffer，否则会导致内存和显存的持续泄漏
-        glDeleteBuffers(1,&EBO);//
-
-        glBindBuffer(GL_ARRAY_BUFFER,0);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
-
-        usleep(33000);
+        render_renderFrame(pObj,texYuv);
         //----------------------------------------绘制车模型----------------------------------//
        
         car_draw(1,upon,angle,view_dist);
@@ -333,10 +255,6 @@ int main()
         glfwSwapBuffers(window);
         glfwPollEvents();       //接收事件信息并返回
     }
-
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &EBO);
     
     // optional: de-allocate all resources once they've outlived their purpose:
     // -------------------------------------------释放内存-----------------------------------//
