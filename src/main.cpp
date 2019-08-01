@@ -19,6 +19,7 @@
 
 #define LUMA_AVG
 #define MAX_VIEWPORTS 2
+#define MAX_SRV_VIEWS 10
 
 using namespace std;
 
@@ -31,14 +32,31 @@ float factor1,factor2,factor3,factor4;
 
 surface_data_t srv_renderObj;
 
-glm::mat4 mProjection[MAX_VIEWPORTS];
+glm::mat4 mProjection;
 // Camera matrix
-glm::mat4 mView[MAX_VIEWPORTS];
+glm::mat4 mView;
 // Model matrix : an identity matrix (model will be at the origin)
-glm::mat4 mModel_bowl[MAX_VIEWPORTS];  // Changes for each model !
+glm::mat4 mModel_bowl;  // Changes for each model !
 // Our ModelViewProjection : multiplication of our 3 matrices
-glm::mat4 mMVP_bowl[MAX_VIEWPORTS];
-glm::mat4 mMVP_car[MAX_VIEWPORTS];
+glm::mat4 mMVP_bowl;
+glm::mat4 mMVP_car;
+
+render_state_t pObj;
+
+typedef struct _srv_coords_t
+{
+	float camx;
+	float camy;
+	float camz;
+	float targetx;
+	float targety;
+	float targetz;
+	float anglex;
+	float angley;
+	float anglez;
+} srv_coords_t;
+
+srv_coords_t srv_coords_vp[MAX_VIEWPORTS];
 
 typedef struct _srv_viewport_t
 {
@@ -49,43 +67,146 @@ typedef struct _srv_viewport_t
 	bool animate;
 } srv_viewport_t;
 
+
 srv_viewport_t srv_viewports[] = {
 	{
-		x : 0,
-		y : 0,
-		width : 960,
-		height: 1080,
-		//fengyuhong 20190224
-		//animate: true,
-		animate: false,
+		0,//x : 0,
+		0,//y : 0,
+		960,//width : 960,
+		1080,//height: 1080,
+		true,//animate: true,
 	},
 	{
-		x : 960,
-		y : 0,
-		width : 960,
-		height: 1080,
-		animate: false,
+		960,//x : 960,
+		0,//y : 0,
+		960,//width : 960,
+		1080,//height: 1080,
+		false,//animate: false,
 	}
 };
-
-render_state_t *pObj;
-
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
+
+
+srv_coords_t srv_coords[] = {
+        {0.000000, 88.167992, 291.995667, 0.000000, 25.990564, 33.987663, -0.999456, 0.000000, 0.000000}, // Front adaptive bowl view
+        //fengyuhong add two same top view
+        {0.000000, 0.000000, 300.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000}, // Top down view
+        //{0.000000, 0.000000, 300.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000}, // Top down view
+        //{0.000000, 0.000000, 300.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000}, // Top down view
+        {0.000000, -260.000000, 160.000000, -5.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000},// Following eight views pan around the vehicle
+        {0.000000, -260.000000, 160.000000, -5.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.897000},
+        {0.000000, -260.000000, 160.000000, -5.000000, 0.000000, 0.000000, 0.000000, 0.000000, 1.794000},
+        {0.000000, -260.000000, 160.000000, -5.000000, 0.000000, 0.000000, 0.000000, 0.000000, 2.691000},
+        {0.000000, -260.000000, 160.000000, -5.000000, 0.000000, 0.000000, 0.000000, 0.000000, 3.588000},
+        {0.000000, -260.000000, 160.000000, -5.000000, 0.000000, 0.000000, 0.000000, 0.000000, 4.485000},
+        {0.000000, -260.000000, 160.000000, -5.000000, 0.000000, 0.000000, 0.000000, 0.000000, 5.382000},
+        {0.000000, -260.000000, 160.000000, -5.000000, 0.000000, 0.000000, 0.000000, 0.000000, 6.280000},
+        {0.000000, 88.200000, 192.000000, -1.000000, 26.000000, 34.000000, -1.500000, 0.000000, -3.1416},//Back
+        {-0.000000, 200.000000, 220.000000, -7.000000, 63.000000, 0.000000, -1.500000, -0.000000, -1.570169}, //Left
+        {-0.000000, 200.000000, 220.000000, -7.000000, 63.000000, 0.000000, -1.500000, 0.000000, 1.570169}, //Right
+        {-0.000000, -29.049999, 440.000000, -67.374092, -39.541992, 0.000000, 0.000000, -0.000000, 0.000000}, //Left blindspot
+        {-0.000000, -29.049999, 440.000000, 67.374092, -39.541992, 0.000000, 0.000000, -0.000000, 0.000000}, //Right blindspot 
+        {0.000000, 0.000000, 300.000000, 0.000000, 60.000000, 0.000000, -1.000000, 0.000000, 3.100000}, //zoomed out
+        {0.000000, 0.000000, 380.000000, 0.000000, 60.000000, 0.000000, -1.000000, 0.000000, 3.100000}, //zoomed out
+        {0.000000, 0.000000, 440.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000}, //zoomed in
+        {0.000000, 190.300049, 150.000000, -1.000000, 80.000000, 35.000000, -1.000000, 0.000000, 0.000000}, // FIle DUMP 0
+        {0.000000, 190.300049, 150.000000, -1.000000, 80.000000, 35.000000, -1.750000, 0.000000, 0.000000}, // File DUMP 1
+        {0.000000, 200.000000, 240.000000, -1.000000, 80.000000, 35.000000, -1.500000, 0.000000, 0.000000}, //Front
+        {-15.149982, 149.549988, 257.200226, 3.312001, 38.720036, 35.000000, -1.484400, 0.008200, -3.228336},//Back
+        {-0.000000, 197.199997, 240.000000, -1.000000, 66.135956, 35.000000, -1.521800, -0.000000, -1.565569}, //Left
+        {-0.000000, 200.000000, 240.000000, -1.000000, 68.776001, 35.000000, -1.500000, 0.000000, 1.570169}, //Right
+        {-0.000000, -29.049999, 440.000000, -67.374092, -39.541992, 0.000000, 0.000000, -0.000000, 0.000000}, //Left blindspot
+        {-0.000000, -29.049999, 440.000000, 67.374092, -39.541992, 0.000000, 0.000000, -0.000000, 0.000000}, //Right blindspot
+        {-15.149982, 149.549988, 257.200226, 3.312001, 38.720036, 35.000000, -1.484400, 0.008200, -3.228336},//Back
+        {-0.000000, 197.199997, 240.000000, -1.000000, 66.135956, 35.000000, -1.521800, -0.000000, -1.565569}, //Left
+        {-0.000000, 200.000000, 240.000000, -1.000000, 68.776001, 35.000000, -1.500000, 0.000000, 1.570169}, //Right
+        {0.000000, 230.300049, 240.000000, -1.000000, 80.000000, 35.000000, -1.500000, 0.000000, 0.000000}, //
+        {0.000000, 250.300049, 240.000000, -1.000000, 80.000000, 35.000000, -1.500000, 0.000000, 0.000000}
+};
+
+int num_srv_views;
+
+void srv_views_init()
+{
+	ifstream file("srv_views.txt");
+	int nlines = 0;
+	string line;
+
+	num_srv_views = (int)(sizeof(srv_coords)/sizeof(srv_coords_t));	
+
+	if(!file.is_open())
+	{
+		printf("3DSRV: Cannot open srv_views.txt. Using default views\n");
+		return;
+	}
+
+	while (!file.eof() && (nlines < MAX_SRV_VIEWS))
+	{
+		getline(file, line);
+		sscanf(line.c_str(), "%f, %f, %f, %f, %f, %f, %f, %f, %f",
+					&(srv_coords[nlines].camx),
+					&(srv_coords[nlines].camy),
+					&(srv_coords[nlines].camz),
+					&(srv_coords[nlines].anglex),
+					&(srv_coords[nlines].angley),
+					&(srv_coords[nlines].anglez),
+					&(srv_coords[nlines].targetx),
+					&(srv_coords[nlines].targety),
+					&(srv_coords[nlines].targetz));
+		nlines++;
+	}
+	num_srv_views = nlines;
+	file.close();
+}
+
 
 
 void render_renderFrame(render_state_t *pObj, GLuint*texYuv)
 {
 	glClear(GL_COLOR_BUFFER_BIT);
+    glPolygonMode(GL_FRONT,GL_LINES);
 	glViewport(srv_viewports[1].x,
 		       srv_viewports[1].y,
-			   srv_viewports[1].width,
-			   srv_viewports[1].height);
+			   srv_viewports[1].height,
+			   srv_viewports[1].width);
 
 	srv_draw(pObj, texYuv, 1);
-    car_draw(1,upon,angle,view_dist);
+    //car_draw(1,upon,angle,view_dist);
 		//boxes_draw((ObjectBox *)pObj->BoxLUT, (Pose3D_f *)pObj->BoxPose3D, texYuv);
     usleep(33000);
+}
+
+
+
+void  render_updateView()
+{
+        /*int i = 1;
+		mProjection= glm::perspective(degreesToRadians(40), (float)srv_viewports[i].width/ (float)srv_viewports[i].height, 1.0f, 5000.0f);
+        printf("persoective degree is %f\n",degreesToRadians(40));
+        printf("view port is  %f\n",(float)srv_viewports[i].width/ (float)srv_viewports[i].height); 
+
+		mView       = glm::lookAt(glm::vec3(srv_coords[i].camx, srv_coords[i].camy, srv_coords[i].camz), // Camera is at (4,3,3), in World Space
+				                  glm::vec3(srv_coords[i].targetx,srv_coords[i].targety,srv_coords[i].targetz), // and looks at the origin
+				                  glm::vec3(0,1,0)  // Head is up (set to 0,-1,0 to look upside-down)
+                                 );
+        printf("lookAt() is cam:%f,%f,%f,target:%f %f %f \n",srv_coords[i].camx,srv_coords[i].camx,srv_coords[i].camx,
+                                                             srv_coords[i].targetx,srv_coords[i].targety,srv_coords[i].targetz);*/
+
+
+		mProjection= glm::perspective(0.6f,0.8f, 1.0f, 5000.0f);
+
+		mView      = glm::lookAt(glm::vec3(0, 0, 300), // Camera is at (4,3,3), in World Space
+				                  glm::vec3(0, 0, 0), // and looks at the origin
+				                  glm::vec3(0, 1, 0)  // Head is up (set to 0,-1,0 to look upside-down)
+                                 );
+		mView = glm::rotate(mView, 0.0f, glm::vec3(1.0, 0.0, 0.0));
+		mView = glm::rotate(mView, 0.0f, glm::vec3(0.0, 1.0, 0.0));
+		mView = glm::rotate(mView, 0.0f, glm::vec3(0.0, 0.0, 1.0));
+
+		mModel_bowl     = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, 1.0f, (80.0f/540.0f)));  // Shashank: Updated scale works good without any scale on Z
+		//mModel_car = glm::translate(mModel_car, glm::vec3(0.0, 0.0, 800.0));
+		mMVP_bowl       = mProjection * mView * mModel_bowl;
 }
 
 
@@ -100,15 +221,14 @@ int render_setup(render_state_t *pObj)
 	printf("render_setup:srv_setup ok\n");
 
     //Initialize views
-    //srv_views_init();
-    /*  */ //????????????????????????????????????????????????????????????
-
+    srv_views_init();
+   
 	//fengyuhong 20190224 add
 	printf("render_setup:srv_views_init ok\n");
 
     //STEP2 - initialise the vertices
-    car_init();
-    GL_CHECK(car_init_vertices_vbo);
+    //car_init();
+    //GL_CHECK(car_init_vertices_vbo);
 
 	//fengyuhong 20190224 add
 	printf("render_setup:car_init ok\n");
@@ -117,55 +237,16 @@ int render_setup(render_state_t *pObj)
     //screen1_init_vbo();
     GL_CHECK(screen1_init_vbo);
 
-    num_viewports = 2;//sizeof(srv_viewports)/sizeof(srv_viewport_t);
-
-    for (int i = 0; i < num_viewports; i++)
-    {
-		//fengyuhong 20190225
-	    //current_index[i] = (0+i)%num_srv_views;
-		current_index[i] = 1;//0
-	    set_coords(i, current_index[i]);
-    }
-
-	//fengyuhong 201902224 add
-	printf("render_setup:set_coords for viewports ok\n");
-
     //boxes_init();
     render_updateView();
 
-    // Default mode for key/joystick input
-    MODE_CAM(srv_coords_vp[0]);
-
     //cull
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
+    //glEnable(GL_CULL_FACE);
+    //glCullFace(GL_BACK);
 
-#if defined(STANDALONE) || defined(SRV_USE_JOYSTICK)
-#ifdef _WIN32
-	hThread = CreateThread(
-		NULL,                   // default security attributes
-		0,                      // use default stack size
-		scan_thread_function,       // thread function name
-		NULL,          // argument to thread function
-		0,                      // use default creation flags
-		&dwThreadId);   // returns the thread identifier
-
-
-								// Check the return value for success.
-								// If CreateThread fails, terminate execution.
-								// This will automatically clean up threads and memory.
-
-	if (hThread == NULL)
-	{
-		printf("CreateThread failed");
-		ExitProcess(3);
-	}
-#else
-    pthread_create(&scan_thread, NULL, scan_thread_function, (void *)&scan_thread_data);
-#endif
-#endif
     return 0;
 }
+
 
 int main()
 {
@@ -195,20 +276,113 @@ int main()
     }
    
    //----------------------------------------纹理绑定----------------------------------------------------//
-    unsigned char*texYuv[4];
+    GLuint texYuv[4];
+    // texture 1
+    // ---------
+    glGenTextures(1, &texYuv[0]);
+    glBindTexture(GL_TEXTURE_2D, texYuv[0]); 
+     // set the texture wrapping parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);	// set texture wrapping to GL_CLAMP_TO_EDGE (default wrapping method)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // set texture filtering parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // load image, create texture and generate mipmaps
     int width, height, nrChannels;
 
-    texYuv[0] = stbi_load("../../ext/resource/image/front0.bmp", &width, &height, &nrChannels, 0);
-    //stbi_image_free(texYuv[0]);
-    texYuv[1]  = stbi_load("../../ext/resource/image/left0.bmp", &width, &height, &nrChannels, 0);
-    //stbi_image_free(texYuv[1]);
-    texYuv[2]  = stbi_load("../../ext/resource/image/rear0.bmp", &width, &height, &nrChannels, 0);
-    //stbi_image_free(texYuv[2]);
-    texYuv[3]  = stbi_load("../../ext/resource/image/right0.bmp", &width, &height, &nrChannels, 0);
-    //stbi_image_free(texYuv[3]);
-     
+    unsigned char *data = stbi_load("../../ext/resource/image/front0.bmp", &width, &height, &nrChannels, 0);
+    if (data)
+    {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    else
+    {
+        std::cout << "Failed to load front texture" << std::endl;
+    }
+    stbi_image_free(data);
+
+    // texture 2
+    // ---------
+    glGenTextures(1, &texYuv[1]);
+    glBindTexture(GL_TEXTURE_2D, texYuv[1]);
+    // set the texture wrapping parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);	// set texture wrapping to GL_CLAMP_TO_EDGE (default wrapping method)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // set texture filtering parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // load image, create texture and generate mipmaps
+    // data = stbi_load(FileSystem::getPath("resources/textures/awesomeface.png").c_str(), &width, &height, &nrChannels, 0);
+    data = stbi_load("../../ext/resource/image/left0.bmp", &width, &height, &nrChannels, 0);
+    if (data)
+    {
+        // note that the awesomeface.png has transparency and thus an alpha channel, so make sure to tell OpenGL the data type is of GL_RGBA
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    else
+    {
+        std::cout << "Failed to load left texture" << std::endl;
+    }
+    stbi_image_free(data);
+
+    // texture 3
+    // ---------
+    glGenTextures(1, &texYuv[2]);
+    glBindTexture(GL_TEXTURE_2D, texYuv[2]);
+    // set the texture wrapping parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);	// set texture wrapping to GL_CLAMP_TO_EDGE (default wrapping method)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // set texture filtering parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // load image, create texture and generate mipmaps
+    // data = stbi_load(FileSystem::getPath("resources/textures/awesomeface.png").c_str(), &width, &height, &nrChannels, 0);
+    data = stbi_load("../../ext/resource/image/rear0.bmp", &width, &height, &nrChannels, 0);
+    if (data)
+    {
+        // note that the awesomeface.png has transparency and thus an alpha channel, so make sure to tell OpenGL the data type is of GL_RGBA
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    else
+    {
+        std::cout << "Failed to load rear texture" << std::endl;
+    }
+    stbi_image_free(data);
+
+    // texture 4
+    // ---------
+    glGenTextures(1, &texYuv[3]);
+    glBindTexture(GL_TEXTURE_2D, texYuv[3]);
+    // set the texture wrapping parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);	// set texture wrapping to GL_CLAMP_TO_EDGE (default wrapping method)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // set texture filtering parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // load image, create texture and generate mipmaps
+    // data = stbi_load(FileSystem::getPath("resources/textures/awesomeface.png").c_str(), &width, &height, &nrChannels, 0);
+    data = stbi_load("../../ext/resource/image/right0.bmp", &width, &height, &nrChannels, 0);
+    if (data)
+    {
+        // note that the awesomeface.png has transparency and thus an alpha channel, so make sure to tell OpenGL the data type is of GL_RGBA
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    else
+    {
+        std::cout << "Failed to load right texture" << std::endl;
+    }
+
+    stbi_image_free(data);
     
-    render_setup(pObj);
+    if(render_setup(&pObj)==-1)
+    {
+        printf("render_setup error!!!!\n");
+        return -1;
+    }
 
     //--------------------------------------渲染循环---------------------------------------//
     while (!glfwWindowShouldClose(window))
@@ -217,39 +391,22 @@ int main()
         processInput(window);
 
         // render
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClearColor(0.0f, 0.5f, 0.5f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
         glDepthFunc(GL_LEQUAL);
         glEnable(GL_DEPTH_TEST);
         //glEnable(GL_CULL_FACE);
         //glCullFace(GL_FRONT);
-
+        render_updateView();
         // render container
-        
-         //----------------------------------绘制3D曲面------------------------------------//
-        glm::mat4 srf_model = glm::mat4(1.0f);//重置模型矩阵,不做任何旋转操作
-        //srf_model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f,0.0f,0.0f));//
-        //srf_model = glm::rotate(srf_model, angle, glm::vec3(0.0f, 0.0f, 1.0f));//
+        glPolygonMode(GL_FRONT,GL_LINES);
 
-         //设置观察矩阵
-        glm::mat4 srf_view = glm::lookAt(glm::vec3(
-                                                   view_dist*cos(degreesToRadians(upon))*sin(degreesToRadians(angle)), 
-                                                   -view_dist*cos(degreesToRadians(upon))*cos(degreesToRadians(angle)), 
-                                                   view_dist*sin(degreesToRadians(upon))),
-                                                   glm::vec3(0.0f, 0.0f, 0.0f), 
-                                                   glm::vec3(0.0f, 0.0f, 1.0f)
-                                                   );
-        //设置透视矩阵
-        glm::mat4 srf_projection = glm::perspective(45.0f, singleRatio, 0.1f, 1000.0f);
-        
-
-        render_renderFrame(pObj,texYuv);
+        render_renderFrame(&pObj,texYuv);
         //----------------------------------------绘制车模型----------------------------------//
        
-        car_draw(1,upon,angle,view_dist);
+        //car_draw(1,upon,angle,view_dist);
         glFlush();
-
-        //usleep(22000);
+        usleep(22000);
         //---------------------------------------交换缓存，数据处理----------------------------//
         //交换缓存
         glfwSwapBuffers(window);
@@ -258,7 +415,7 @@ int main()
     
     // optional: de-allocate all resources once they've outlived their purpose:
     // -------------------------------------------释放内存-----------------------------------//
-    car_deinit();//释放模型
+    //car_deinit();//释放模型
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
     glfwTerminate();//清理所有未完成的GLFW资源的内存

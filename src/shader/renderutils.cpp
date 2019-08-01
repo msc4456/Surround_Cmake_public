@@ -117,10 +117,12 @@ GLuint renderutils_compileShader(GLenum shaderType, const GLchar* pSource) {
 
 GLuint renderutils_createProgram(const GLchar* pVertexSource, const GLchar* pFragmentSource)
 {
+
    GLuint vertexShader = renderutils_compileShader(GL_VERTEX_SHADER, pVertexSource);
    if (!vertexShader) {
        return 0;
    }
+
 
    GLuint pixelShader = renderutils_compileShader(GL_FRAGMENT_SHADER, pFragmentSource);
    if (!pixelShader) {

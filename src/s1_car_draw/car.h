@@ -10,6 +10,13 @@
 #ifndef _CAR_H_
 #define _CAR_H_
 
+#include <glm/vec3.hpp> // glm::vec3
+#include <glm/vec4.hpp> // glm::vec4, glm::ivec4
+#include <glm/mat4x4.hpp> // glm::mat4
+#include <glm/gtc/matrix_transform.hpp> // glm::translate, glm::rotate, glm::scale, glm::perspective
+#include <glm/gtc/type_ptr.hpp> // glm::value_ptr
+#include <glm/gtx/string_cast.hpp>// 用于打印 mat4 查看当前状态
+
 #ifdef __cplusplus
 extern "C" {
 #endif

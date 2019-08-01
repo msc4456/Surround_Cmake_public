@@ -6,7 +6,6 @@
 #include "../shader/renderutils.h"
 #include "../Pod_tools/PVRTModelPOD.h"
 
-#define GLM_FORCE_RADIANS
 #include <glm/vec3.hpp> // glm::vec3
 #include <glm/vec4.hpp> // glm::vec4, glm::ivec4
 #include <glm/mat4x4.hpp> // glm::mat4
@@ -23,6 +22,13 @@
 extern glm::mat4 mProjection[];
 extern glm::mat4 mView[];
 extern glm::mat4 mMVP_car[];
+
+typedef struct
+{
+	GLfloat x;
+	GLfloat y;
+	GLfloat z;
+} vertex3df;
 
 int num_viewports = 0;
 /******************************************************************************
@@ -48,38 +54,7 @@ const float g_fDemoFrameRate = 1.0f / 30.0f;
 // The camera to use from the pod file
 const int g_ui32Camera = 0;
 
-typedef struct
-{
-	GLfloat x;
-	GLfloat y;
-	GLfloat z;
-} vertex3df;
 
-typedef struct _srv_viewport_t
-{
-	unsigned int x;
-	unsigned int y;
-	unsigned int width;
-	unsigned int height;
-	bool animate;
-} srv_viewport_t;
-
-srv_viewport_t srv_viewports[] = {
-	{
-		0,//x : 0,
-		0,//y : 0,
-		960,//width : 960,
-		1080,//height: 1080,
-		true,//animate: true,
-	},
-	{
-		960,//x : 960,
-		0,//y : 0,
-		960,//width : 960,
-		1080,//height: 1080,
-		false,//animate: false,
-	}
-};
 /******************************************************************************
  Content file names
 ******************************************************************************/
@@ -766,20 +741,20 @@ void car_worldToNdc(float *xndc, float *yndc, GLfloat x, GLfloat y, GLfloat z)
 }
 
 
-void render_ndcToScreen(int *xscr, int *yscr, float xndc, float yndc)
+/*void render_ndcToScreen(int *xscr, int *yscr, float xndc, float yndc)
 {
 	*xscr = (int)round(srv_viewports[0].x + (srv_viewports[0].width * (xndc + 1.0)/2));
 	*yscr = (int)round(srv_viewports[0].y + (srv_viewports[0].height * (1.0 - yndc)/2));
-}
+} */
 
-void car_worldToScreen(int *xscr, int *yscr, GLfloat x, GLfloat y, GLfloat z)
+/* void car_worldToScreen(int *xscr, int *yscr, GLfloat x, GLfloat y, GLfloat z)
 {
         float xndc, yndc;
         car_worldToNdc(&xndc, &yndc, x, y, z);
         render_ndcToScreen(xscr, yscr, xndc, yndc);
-}
+}*/
 
-void car_getScreenLimits(int *xmin, int *xmax, int *ymin, int *ymax)
+/*void car_getScreenLimits(int *xmin, int *xmax, int *ymin, int *ymax)
 {
 	int x, y;
 	car_data_t *cd = &car_data[active_car_index];
@@ -802,4 +777,4 @@ void car_getScreenLimits(int *xmin, int *xmax, int *ymin, int *ymax)
 			if(y > *ymax) *ymax = y;
 		}
 	}
-}
+}*/
